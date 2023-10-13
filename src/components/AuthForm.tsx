@@ -1,18 +1,29 @@
 'use client'
-import React, { useState, useCallback } from 'react' 
+import React, { useState, useCallback, useEffect } from 'react' 
 import { useForm, FieldValues, SubmitHandler } from 'react-hook-form'
 import { BsGithub, BsGoogle } from 'react-icons/bs'
 import axios from 'axios'
+import { signIn, useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 
 import { Input } from './Input'
 import { Button } from './Button'
 import { AuthSocialButton } from './AuthSocialButton'
+import toast from 'react-hot-toast'
 
 type Variant = 'LOGIN' | 'REGISTER'
 
 export const AuthForm = () => {
-  const [variant, setVariant] = useState<Variant>('LOGIN')
+  const session = useSession()
+  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [variant, setVariant] = useState<Variant>('LOGIN')
+
+  useEffect(() => {
+    if(session?.status === 'authenticated') {
+      router.push('/users')
+    }
+  }, [session?.status])
 
   const toggleVariant = useCallback(() => {
     if(variant === 'LOGIN') {
@@ -27,16 +38,42 @@ export const AuthForm = () => {
 
     if(variant === 'REGISTER') {
       axios.post('/api/register', data)
+      .then(() => signIn('credentials', data))
+      .catch(() => toast.error('Algo deu errado, tente novamente'))
+      .finally(() => setIsLoading(false))
     }
 
     if(variant === 'LOGIN') {
-      //Next auth sign in
+      signIn('credentials', {
+        ...data,
+        redirect: false
+      })
+      .then((callback) => {
+        if(callback?.error) {
+          toast.error('Login ou senha inválidos')
+        }
+        if(callback?.ok && !callback?.error) {
+          toast.success('Logado com sucesso!')
+          router.push('/users')
+        }
+      })
+      .finally(() => setIsLoading(false))
     }
   }
 
   const socialAction = async (action: string) => {
     setIsLoading(true);
-    //Next auth social sign in
+    signIn(action, { redirect: false })
+    .then((callback) => {
+      if(callback?.error) {
+        toast.error('Login ou senha inválidos')
+      }
+      if(callback?.ok && !callback?.error) {
+        toast.success('Logado com sucesso!')
+        router.push('/users')
+      }
+    })
+    .finally(() => setIsLoading(false))
   }
 
   const { register, handleSubmit, formState: { errors } } = useForm<FieldValues>({
